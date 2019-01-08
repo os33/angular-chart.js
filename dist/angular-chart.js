@@ -1,7 +1,7 @@
 /*!
- * angular-chart.js - An angular.js wrapper for Chart.js
+ * @os33/angular-chart.js - An angular.js wrapper for Chart.js
  * http://jtblin.github.io/angular-chart.js/
- * Version: 1.1.1
+ * Version: 1.1.7
  *
  * Copyright 2016 Jerome Touffe-Blin
  * Released under the BSD-2-Clause license
@@ -20,7 +20,7 @@
   } else {
     // Browser globals
     if (typeof angular === 'undefined') {
-        throw new Error('AngularJS framework needs to be included, see https://angularjs.org/');
+      throw new Error('AngularJS framework needs to be included, see https://angularjs.org/');
     } else if (typeof Chart === 'undefined') {
       throw new Error('Chart.js library needs to be included, see http://jtblin.github.io/angular-chart.js/');
     }
@@ -118,7 +118,8 @@
           chartColors: '=?',
           chartClick: '=?',
           chartHover: '=?',
-          chartDatasetOverride: '=?'
+          chartDatasetOverride: '=?',
+          chartPlugins: '=?'
         },
         link: function (scope, elem/*, attrs */) {
           if (useExcanvas) window.G_vmlCanvasManager.initElement(elem[0]);
@@ -139,6 +140,8 @@
           scope.$on('$resize', function () {
             if (scope.chart) scope.chart.resize();
           });
+
+          scope.$on('$chartUpdate', watchUpdate);
 
           function watchData (newVal, oldVal) {
             if (! newVal || ! newVal.length || (Array.isArray(newVal[0]) && ! newVal[0].length)) {
@@ -163,6 +166,13 @@
             // chart.update() doesn't work for series and labels
             // so we have to re-create the chart entirely
             createChart(chartType, scope, elem);
+          }
+
+          function watchUpdate() {
+            if(scope.chart){
+              scope.chart.update();
+              scope.$emit('chart-update', scope.chart);
+            }
           }
 
           function watchType (newVal, oldVal) {
@@ -190,7 +200,8 @@
       scope.chart = new ChartJs.Chart(ctx, {
         type: type,
         data: data,
-        options: options
+        options: options,
+        plugins: scope.chartPlugins
       });
       scope.$emit('chart-create', scope.chart);
       bindEvents(cvs, scope);
@@ -199,8 +210,8 @@
     function canUpdateChart (newVal, oldVal) {
       if (newVal && oldVal && newVal.length && oldVal.length) {
         return Array.isArray(newVal[0]) ?
-        newVal.length === oldVal.length && newVal.every(function (element, index) {
-          return element.length === oldVal[index].length; }) :
+          newVal.length === oldVal.length && newVal.every(function (element, index) {
+            return element.length === oldVal[index].length; }) :
           oldVal.reduce(sum, 0) > 0 ? newVal.length === oldVal.length : false;
       }
       return false;
@@ -314,7 +325,7 @@
       var colors = getColors(type, scope);
       return Array.isArray(scope.chartData[0]) ?
         getDataSets(scope.chartLabels, scope.chartData, scope.chartSeries || [], colors, scope.chartDatasetOverride) :
-        getData(scope.chartLabels, scope.chartData, colors, scope.chartDatasetOverride);
+        getData(scope.chartLabels, scope.chartData, colors, scope.chartDatasetOverride, scope);
     }
 
     function getDataSets (labels, data, series, colors, datasetOverride) {
@@ -333,19 +344,38 @@
       };
     }
 
-    function getData (labels, data, colors, datasetOverride) {
-      var dataset = {
-        labels: labels,
-        datasets: [{
-          data: data,
-          backgroundColor: colors.map(function (color) {
-            return color.pointBackgroundColor;
-          }),
-          hoverBackgroundColor: colors.map(function (color) {
-            return color.backgroundColor;
-          })
-        }]
-      };
+    function getData (labels, data, colors, datasetOverride, scope) {
+      var dataset;
+      if(scope.chartType){
+        dataset = {
+          labels: labels,
+          datasets: [{
+            data: data
+          }]
+        };
+        scope.chartColors.slice(0, 1).map(function (color) {
+          Object.keys(color).forEach(function (key) {
+            var d = dataset.datasets[0][key];
+            if (d === undefined) {
+              d = dataset.datasets[0][key] = color[key];
+            }
+          });
+        });
+      }else{
+        dataset = {
+          labels: labels,
+          datasets: [{
+            data: data,
+            backgroundColor: colors.map(function (color) {
+              return color.pointBackgroundColor;
+            }),
+            hoverBackgroundColor: colors.map(function (color) {
+              return color.backgroundColor;
+            })
+          }]
+        };
+      }
+
       if (datasetOverride) {
         angular.merge(dataset.datasets[0], datasetOverride);
       }
